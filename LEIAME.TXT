@@ -1,0 +1,52 @@
+[RESUMO]
+A autenticação baseada em senhas digitadas pelo teclado ainda é a forma mais comum
+de autenticação em computadores. Este trabalho tem por objetivo propor uma forma
+alternativa de utilizar senhas complexas, seguindo um padrão de complexidade baseado na
+personalização que o usuário deverá montar.
+
+Para facilitar a compreemsão do funcionamento da biblioteca, foi criado um programa visual em java que gera a biblioteca personalizada e deve ser executado dentro de um diretório com permissão de escrita.
+Por motivos de segurança a autenticação primária, sua senha principal, será sempre usada antes da autenticação do módulo pam_msi.
+
+Obrigado por testar este projeto.Use com cautela.
+Repositório Git:
+https://github.com/bruno-sf/ufrj-msi
+versão 0.1 - 10/09/2015
+
+[CONTEÚDO DO CD]
+"LEIAME.TXT" - Este arquivo ;)
+"pam_msi.c" - código da biblioteca pam em c.
+"Monografia-MSI-BrunoF.pdf" - Monografia.
+"GeraPAM"-Programa em java gerador-da-biblioteca para facilitar
+	\-"Como-Usar - GeraPAM.mkv" - Vídeo demonstrativo.
+	\-"pam_msi.jar" - Programa em java.
+	\-"README.TXT" - Readme java.
+	\-"ScreenShot1.png" - Screenshot.
+
+[PRÉ-REQUISITOS PARA COMPILAR A BIBLIOTECA]
+libpam0g:amd64 1.1.8-1ubuntu2 amd64 Pluggable Authentication Modules library
+libpam0g-dev:amd64 1.1.8-1ubuntu2 amd64 Development files for PAM (/usr/include/security/pam_modules.h)
+pamtester 0.1.2-1 amd64 utility program to test the PAM facility
+gcc - GNU project C and C++ compiler
+crypt - password and data encryption
+
+[COMPILAR]
+gcc -fPIC -DPIC -shared -rdynamic -o pam_msi.so pam_msi.c -lcrypt
+
+[INSTALANDO]
+sudo cp pam_msi.so /lib/security/
+ou
+sudo cp pam_msi.so /lib/x86_64-linux-gnu/security/
+*Certifique-se que a permissão seja 644 (rw-r-r)
+
+[CONFIGURAÇÃO]
+vi /etc/pam.d/sshd
+
+@include common-auth
+@include common-account
+@include common-session-noninteractive
+auth   requisite       /lib/security/pam_msi.so
+
+[TESTANDO]
+pamtester -v ssh brunof authenticate
+ou
+ssh localhost
