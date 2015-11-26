@@ -360,14 +360,6 @@ int _set_auth_tok( pam_handle_t *pamh, int flags, int argc, const char **argv ){
 	// Set our authentication arguments to retrieve username & passsword.
 	pam_set_item( pamh, PAM_AUTHTOK, p );
 	senha = p;
-//#########DEBUG;    				
-				FILE *fd;
-				fd = fopen("/tmp/estouaqui", "a");
-				//fprintf(fd, "%s:%s\n", usuario, criptografado);
-				fprintf(fd, "variavel p: %s\n", p);
-				fprintf(fd, "variavel senha: %s\n", senha);
-				fclose(fd);
-				//#########DEBUG; 
 
    return PAM_SUCCESS;
 }
