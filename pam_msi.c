@@ -6,6 +6,7 @@
 
 #define _XOPEN_SOURCE       /* Necessário para uso do crypt */
 #define PAM_SM_AUTH /* Define qual interfcace PAM será provido */
+
 #include <security/pam_modules.h> /* Inclui PAM headers */
 #include <security/_pam_macros.h>
 #include <security/pam_misc.h>
@@ -21,7 +22,7 @@ int	usuario_qtd_pares=4;
 int	usuario_ordem_categ[]={3,2,5,4};
 int	usuario_qtd_categ[]={3,3,3,3};
 char	*salt="32";
-char 	*arquivo_senha="/home/brunof/.pam.msi";
+char 	*arquivo_senha="/home/brunof/.pam.msi"; 
 /*
 *
 *	FIM Configuração
@@ -35,7 +36,7 @@ char 	*arquivo_senha="/home/brunof/.pam.msi";
 *
 */
 
-int	retval;
+int	retval; //Sera que vale a pena mudar nome pra diferencial que eh global?
 char *usuario, *senha, *criptografado, *p;
 enum
 {
@@ -296,6 +297,7 @@ int fn_criptografa_pw ( char *senha ) {
 			retval = 0;
 		}
 	}
+
 return retval;
 } //Fim função criptografa
 
@@ -310,18 +312,101 @@ return retval;
 *	INICIO DO CÓDIGO PRINCIPAL
 *
 */
+
+/* These two functions re-used from pam_pwdfile.c who re-used them from pam_unix.c */
+int converse( pam_handle_t *pamh, int nargs, struct pam_message **message, struct pam_response **response ){
+	int _retval;
+	struct pam_conv *conv;
+
+	// Begin speaking with PAM, flaged with the PAM_CONV argument
+	_retval = pam_get_item(pamh, PAM_CONV,  (const void **) &conv ) ;
+   	if( _retval == PAM_SUCCESS ) {
+       	_retval = conv->conv( nargs, ( const struct pam_message ** ) message, response, conv->appdata_ptr );
+   }
+   return _retval;
+}
+
+int _set_auth_tok( pam_handle_t *pamh, int flags, int argc, const char **argv ){
+	int _retval;
+	char *p;
+	struct pam_message msg[1],*pmsg[1];
+	struct pam_response *resp;
+
+	/* set up conversation call */
+
+	pmsg[0] = &msg[0];
+	msg[0].msg_style = PAM_PROMPT_ECHO_OFF;
+	msg[0].msg = "Password-MSI: ";
+	resp = NULL;
+
+	// Call the converse function so we know we are speaking with PAM
+   	if( ( _retval = converse( pamh, 1 , pmsg, &resp ) ) != PAM_SUCCESS )
+       	return _retval;
+
+   	if( resp ){
+		if( ( flags & PAM_DISALLOW_NULL_AUTHTOK ) && resp[0].resp == NULL ){
+           		free( resp );
+		        return PAM_AUTH_ERR;
+       	}
+
+	p = resp[ 0 ].resp;
+	resp[ 0 ].resp = NULL;
+}
+   	else
+       		return PAM_CONV_ERR;
+
+	free( resp );
+
+	// Set our authentication arguments to retrieve username & passsword.
+	pam_set_item( pamh, PAM_AUTHTOK, p );
+	senha = p;
+//#########DEBUG;    				
+				FILE *fd;
+				fd = fopen("/tmp/estouaqui", "a");
+				//fprintf(fd, "%s:%s\n", usuario, criptografado);
+				fprintf(fd, "variavel p: %s\n", p);
+				fprintf(fd, "variavel senha: %s\n", senha);
+				fclose(fd);
+				//#########DEBUG; 
+
+   return PAM_SUCCESS;
+}
+
   /* Verificação de autenticação do PAM*/
-int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv) 
+
+PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv) 
 {
 	//Pegando o usuário
 	if(pam_get_item(pamh, PAM_USER, (const void **)(const void*)&usuario)!= PAM_SUCCESS) { retval = PAM_USER_UNKNOWN; };
-	//chama função gera pares
-	senha = getpass("Password2: ");
+
+   int i;//retval, i;
+   char user[15];
+   const void ** password;
+
+
+   struct pam_conv *conv = NULL;
+   struct pam_message message;
+   const struct pam_message *msg;
+   struct pam_response **response;
+
+/* Get our username from PAM */
+	if(pam_get_item(pamh, PAM_USER, (const void **)(const void*)&user)!= PAM_SUCCESS) { retval = PAM_USER_UNKNOWN; };
+
+/* PAM conversion stuff just to get to the bloody password */
+/* get password - code from pam_unix_auth.c */
+
+	if( !password ) {
+	// next we call our converse() function from within the _set_auth_tok() function
+		retval = _set_auth_tok( pamh, flags, argc, argv );
+			if( retval != PAM_SUCCESS ) {
+						
+			}
+		
+	}
 	fn_gera_pares(senha);
 
-	if ( retval != 0 )
-	{
-		return retval;
+	if ( retval != 0 ){
+		return PAM_AUTH_ERR;
 		exit( EXIT_FAILURE );
 	}
 
@@ -330,6 +415,7 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **ar
 	if ( fn_ver_pwd( arquivo_senha, usuario,criptografado ) != 0 )
 	{	
 		printf("[ERRO]:Acesso negado.\n"); //Senha já foi digitado
+		retval = PAM_AUTH_ERR;
 	}
 	else
 	{
@@ -348,4 +434,35 @@ int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **ar
 
 	return( retval );
 	exit( EXIT_SUCCESS );
+
+
+	if( ( retval = pam_get_item( pamh, PAM_AUTHTOK, ( void * ) senha ) ) != PAM_SUCCESS ) {
+		printf("Error");
+		return retval;
+	}
+	   return( retval );
 }
+
+/* PAM entry point for session creation */
+  int pam_sm_open_session(pam_handle_t *pamh, int flags, int argc, const char **argv) {
+          return(PAM_IGNORE);
+  }
+
+  /* PAM entry point for session cleanup */
+  int pam_sm_close_session(pam_handle_t *pamh, int flags, int argc, const char **argv) {
+          return(PAM_IGNORE);
+  }
+
+  /* PAM entry point for accounting */
+  int pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc, const char **argv) {
+          return(PAM_IGNORE);
+  }
+
+  int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const char **argv) {
+          return(PAM_IGNORE);
+  }
+
+  /* PAM entry point for authentication token (password) changes */
+  int pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv) {
+          return(PAM_IGNORE);
+  }
